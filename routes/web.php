@@ -1,21 +1,15 @@
 <?php
-
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RoomController;
 
-Route::get('/', fn () => redirect('/rooms'));  // redirige por path, SIN usar nombre
+Route::get('/', fn () => redirect()->route('rooms.index'));
 
-// Si quieres proteger con login:
-Route::middleware('auth')->group(function () {
-    Route::get('/rooms', [RoomController::class, 'index'])->name('rooms.index');
-    Route::resource('rooms', RoomController::class)->except(['index']);
-    Route::get('/dashboard', fn () => redirect('/rooms'))->name('dashboard');
-});
+Route::get('/rooms', [RoomController::class, 'index'])->name('rooms.index');
+Route::post('/rooms', [RoomController::class, 'store'])->name('rooms.store');
+Route::put('/rooms/{room}', [RoomController::class, 'update'])->name('rooms.update');
+Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])->name('rooms.destroy');
 
-// Si quieres que /rooms sea público, usa esto en cambio:
-// Route::get('/rooms', [RoomController::class, 'index'])->name('rooms.index');
-// Route::resource('rooms', RoomController::class)->except(['index']);
-// Route::get('/dashboard', fn () => redirect('/rooms'))->middleware('auth')->name('dashboard');
+// Acciones de ocupación (misma página)
+Route::post('/rooms/{room}/checkin', [RoomController::class, 'checkin'])->name('rooms.checkin');
+Route::post('/rooms/{room}/checkout', [RoomController::class, 'checkout'])->name('rooms.checkout');
 
-require __DIR__.'/auth.php'; // <<— importante, Breeze define aquí /login y /register
-
+Route::get('/dashboard', fn () => redirect()->route('rooms.index'))->name('dashboard');

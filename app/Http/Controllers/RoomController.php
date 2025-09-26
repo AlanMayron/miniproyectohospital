@@ -8,91 +8,76 @@ use Illuminate\Validation\Rule;
 
 class RoomController extends Controller
 {
-    public function index(\Illuminate\Http\Request $request)
-{
-    $q = (string) $request->query('q', '');
-    $showTrashed = $request->boolean('trashed');
-
-    $query = \App\Models\Room::query();
-
-    if ($showTrashed) {
-        $query->onlyTrashed();
-    }
-
-    if ($q !== '') {
-        $query->where(function ($qq) use ($q) {
-            $qq->where('name', 'ilike', "%{$q}%")
-               ->orWhere('location', 'ilike', "%{$q}%");
-        });
-    }
-
-    $rooms = $query->orderByDesc('id')
-                   ->paginate(10)
-                   ->withQueryString();
-
-    return view('rooms.index', compact('rooms', 'q', 'showTrashed'));
-}
-
-
-    public function create()
+    public function index()
     {
-        return view('rooms.create');
+        // puedes paginar si quieres: ->paginate(12)
+        $rooms = Room::orderBy('created_at', 'desc')->get();
+        return view('rooms.index', compact('rooms'));
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name'     => ['required','string','min:3','max:120','unique:rooms,name'],
-            'capacity' => ['required','integer','min:1'],
-            'status'   => ['required', Rule::in(['disponible','ocupada','mantenimiento'])],
-            'location' => ['nullable','string','max:120'],
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'capacity'    => ['required', 'integer', 'min:0', 'max:100000'],
         ]);
 
-        Room::create($validated);
+        $data['occupancy'] = 0;
+        Room::create($data);
 
-        return redirect()->route('rooms.index')->with('success', 'Sala creada correctamente.');
-    }
-
-    public function edit(Room $room)
-    {
-        return view('rooms.edit', compact('room'));
+        return redirect()->route('rooms.index')->with('ok', 'Sala creada.');
     }
 
     public function update(Request $request, Room $room)
     {
-        $validated = $request->validate([
-            'name'     => ['required','string','min:3','max:120', Rule::unique('rooms','name')->ignore($room->id)],
-            'capacity' => ['required','integer','min:1'],
-            'status'   => ['required', Rule::in(['disponible','ocupada','mantenimiento'])],
-            'location' => ['nullable','string','max:120'],
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'capacity'    => ['required', 'integer', 'min:0', 'max:100000'],
         ]);
 
-        $room->update($validated);
+        // Ajusta ocupación si quedó mayor a nueva capacidad
+        if ($room->occupancy > $data['capacity']) {
+            $data['occupancy'] = $data['capacity'];
+        }
 
-        return redirect()->route('rooms.index')->with('success', 'Sala actualizada.');
+        $room->update($data);
+
+        return redirect()->route('rooms.index')->with('ok', 'Sala actualizada.');
     }
 
     public function destroy(Room $room)
     {
         $room->delete();
-
-        return redirect()->route('rooms.index')->with('success', 'Sala eliminada.');
+        return redirect()->route('rooms.index')->with('ok', 'Sala eliminada.');
     }
-    public function restore($id)
-{
-    $room = \App\Models\Room::withTrashed()->findOrFail($id);
-    $room->restore();
 
-    return redirect()->route('rooms.index', request()->query())
-        ->with('success', 'Sala restaurada.');
-}
-public function forceDelete($id)
-{
-    $room = \App\Models\Room::withTrashed()->findOrFail($id);
-    $room->forceDelete(); // elimina físicamente
+    public function checkin(Request $request, Room $room)
+    {
+        // +1 persona (o n si envías 'count')
+        $count = (int) $request->input('count', 1);
+        if ($count < 1) $count = 1;
 
-    return redirect()
-        ->route('rooms.index', ['trashed' => 1]) // volver a vista de eliminadas
-        ->with('success', 'Sala eliminada definitivamente.');
-}
+        $new = $room->occupancy + $count;
+        if ($new > $room->capacity) {
+            return redirect()->route('rooms.index')->with('error', 'Capacidad excedida.');
+        }
+
+        $room->update(['occupancy' => $new]);
+
+        return redirect()->route('rooms.index')->with('ok', 'Ingreso registrado.');
+    }
+
+    public function checkout(Request $request, Room $room)
+    {
+        // -1 persona (o n si envías 'count')
+        $count = (int) $request->input('count', 1);
+        if ($count < 1) $count = 1;
+
+        $new = max(0, $room->occupancy - $count);
+        $room->update(['occupancy' => $new]);
+
+        return redirect()->route('rooms.index')->with('ok', 'Egreso registrado.');
+    }
 }

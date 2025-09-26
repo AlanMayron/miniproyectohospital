@@ -3,12 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes; // ← importa el trait
 
 class Room extends Model
 {
-    use HasFactory, SoftDeletes; // ← activa Soft Deletes
+    protected $fillable = ['name', 'description', 'capacity', 'occupancy'];
 
-    protected $fillable = ['name','location','capacity','status'];
+    protected $casts = [
+        'capacity' => 'integer',
+        'occupancy' => 'integer',
+    ];
+
+    public function getUtilizationAttribute(): float
+    {
+        return $this->capacity > 0 ? round(($this->occupancy / $this->capacity) * 100, 1) : 0.0;
+    }
 }
